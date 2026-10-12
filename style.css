@@ -1,0 +1,294 @@
+/* ============================================================================
+   LogicSim 界面样式
+   ----------------------------------------------------------------------------
+   现代化改造范围：颜色、边框、圆角、阴影、交互反馈、滚动条等“视觉层”。
+   布局几何保持与原版一致，因为 ViewGen.js 在运行时会测量这些元素并写回内联
+   像素值（见下方 GEOMETRY 区块的标注）。改动这些数值必须同步修改 ViewGen.js。
+
+   注意：Tailwind 的 preflight 已在 index.html 中关闭，以避免重置下面的布局规则。
+   ============================================================================ */
+
+@font-face {
+    font-family: 'TsangerYuYangT03';
+    src: url('./lib/TsangerYuYangT-W03.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+
+/* ============================================================================
+   GEOMETRY — 与 ViewGen.js 耦合，改动前请先读该文件
+   ----------------------------------------------------------------------------
+   150px  : .app-header 高度 = .mini-map 高度；JS 里 miniScale = 300 / newWidth
+   200px  : --panel-top，顶部面板高度，同时是 .main-container / .right-container /
+            #app-resize 的 top（三者必须一致）
+   32px   : --status-h，底部状态栏高度，同时是上述三者的 bottom
+   300px  : .right-container 默认宽度，也是 #app-resize 默认 right 值；
+            app.ResizeBlock() 会写回 300 / 0
+   10px   : .main-container 的 left
+   6px    : .main-container 与 #app-resize 的间距（JS 写 right = x + 6）
+   ============================================================================ */
+
+:root {
+    --panel-top: 200px;
+    --status-h: 32px;
+}
+
+html, body, .joint-app {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    -webkit-user-select: none;
+    -moz-user-select: -moz-none;
+    user-select: none;
+    font-family: TsangerYuYangT03, sans-serif, Arial;
+    overflow: hidden;
+    display: block;
+}
+
+/* Header: minimap (300x150) + toolbar */
+.app-header {
+    position: relative;
+    width: 100%;
+    height: 150px;
+    overflow: hidden;
+}
+
+/* Body: canvas + inspector + status strip.
+   Height keeps the original calc(100% - 60px); the inspector/canvas reserve
+   --panel-top above the thin status bar. */
+.app-body {
+    position: relative;
+    height: -moz-calc(100% - 60px);
+    height: -webkit-calc(100% - 60px);
+    height: calc(100% - 60px);
+}
+
+/* ---- minimap ---- */
+.mini-map {
+    display: inline-block;
+    width: 300px;
+    height: 150px;
+    padding: 0;
+    background-color: #f8fafc;
+    border-right: 1px solid #e2e8f0;
+}
+
+#mini-paper {
+    background-color: #f1f5f9;
+}
+
+#mini-view {
+    border: 2px solid #0ea5e9 !important;
+    border-radius: 4px;
+    background-color: rgba(14, 165, 233, 0.08) !important;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.15);
+}
+
+#mini-resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 10px;
+    height: 10px;
+    cursor: nwse-resize;
+    margin: 0 -7px -7px 0;
+    border-radius: 50%;
+    border: 2px solid #0ea5e9;
+    background-color: #ffffff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+}
+
+/* ---- toolbar ---- */
+.title-container {
+    display: inline-block;
+    position: absolute;
+    height: 100%;
+    left: 300px;
+    right: 0;
+    box-sizing: border-box;
+    background-color: #ffffff;
+    z-index: 10;
+    overflow: auto;
+}
+
+/* ---- left gutter ---- */
+.left-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 10px;
+    height: 100%;
+    overflow: auto;
+    background-color: #f1f5f9;
+    z-index: 10;
+}
+
+/* ---- canvas host ---- */
+.main-container {
+    position: absolute;
+    top: var(--panel-top);
+    left: 10px;
+    right: 306px;
+    bottom: var(--status-h);
+    overflow: hidden;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-sizing: border-box;
+    background-color: #ffffff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+#paper-container {
+    position: absolute;
+}
+
+/* ---- canvas/inspector drag handle ----
+   ViewGen.js parses the computed `right` value and rewrites it as a raw number,
+   so no transition here: it would fight the drag and the 300/0 reset. */
+#app-resize {
+    position: absolute;
+    top: var(--panel-top);
+    width: 6px;
+    right: 300px;
+    bottom: var(--status-h);
+    background-color: #e2e8f0;
+    cursor: ew-resize;
+    border-radius: 3px;
+}
+
+#app-resize:hover {
+    background-color: #fb7185;
+}
+
+/* ---- inspector ---- */
+.right-container {
+    position: absolute;
+    top: var(--panel-top);
+    right: 0;
+    width: 300px;
+    bottom: var(--status-h);
+    border: 1px solid #fda4af;
+    border-radius: 8px;
+    box-sizing: border-box;
+    overflow: auto;
+    background-color: #ffffff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+/* ---- top panel: model JSON (left) + inspector (right) ----
+   Sits above the canvas/inspector row, so its height must equal --panel-top. */
+.top-panel {
+    position: absolute;
+    top: 0;
+    left: 10px;
+    right: 0;
+    height: var(--panel-top);
+    box-sizing: border-box;
+    border-radius: 8px;
+    z-index: 5;
+}
+
+/* ---- bottom status bar ---- */
+.bottom-container {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 10px;
+    width: 100%;
+    height: var(--status-h);
+    background-color: #ffffff;
+    border-radius: 8px 8px 0 0;
+    box-shadow: 0 -1px 3px rgba(15, 23, 42, 0.06);
+    z-index: 10;
+}
+
+/* ============================================================================
+   Visual polish for jQuery-driven / vendor-rendered pieces.
+   These are not part of the geometry contract above.
+   ============================================================================ */
+
+/* Form controls do not inherit the page font by default. Tailwind's preflight is
+   disabled here, so restore inheritance explicitly to keep the Chinese webfont. */
+button,
+input,
+select,
+textarea {
+    font-family: inherit;
+}
+
+/* Select2: match the Tailwind-styled inputs. */
+.select2-container--default .select2-selection--single {
+    height: 34px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background-color: #ffffff;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 32px;
+    color: #334155;
+    font-size: 12px;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 32px;
+}
+
+.select2-container--default.select2-container--focus .select2-selection--single,
+.select2-container--default.select2-container--open .select2-selection--single {
+    border-color: #fb7185;
+    box-shadow: 0 0 0 2px rgba(251, 113, 133, 0.35);
+}
+
+.select2-dropdown {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+    font-size: 12px;
+}
+
+/* JointJS paper: soft dotted grid instead of the original harsh green. */
+#paper {
+    background-color: #ffffff;
+}
+
+/* Scrollbars: thin and neutral instead of the OS default. */
+.title-container::-webkit-scrollbar,
+.right-container::-webkit-scrollbar,
+textarea::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.title-container::-webkit-scrollbar-thumb,
+.right-container::-webkit-scrollbar-thumb,
+textarea::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+
+.title-container::-webkit-scrollbar-thumb:hover,
+.right-container::-webkit-scrollbar-thumb:hover,
+textarea::-webkit-scrollbar-thumb:hover {
+    background-color: #94a3b8;
+}
+
+.title-container::-webkit-scrollbar-track,
+.right-container::-webkit-scrollbar-track,
+textarea::-webkit-scrollbar-track {
+    background-color: transparent;
+}
+
+/* Status text: JS sets textContent and an inline red color on parse errors. */
+#status {
+    margin: 0;
+}

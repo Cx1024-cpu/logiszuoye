@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="IE=edge" http-equiv="X-UA-Compatible" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LogicSim · 逻辑表达式可视化</title>
+
+    <!-- Tailwind CSS, vendored locally (public/lib/tailwind.js) so the deployed site
+         has no runtime CDN dependency and works offline. No build step is involved:
+         this is Tailwind's self-contained browser build. -->
+    <script src="lib/tailwind.js"></script>
+    <script>
+        // preflight is disabled deliberately: it would reset the legacy layout rules in
+        // style.css that ViewGen.js measures at runtime (see the geometry block there).
+        tailwind.config = {
+            corePlugins: { preflight: false },
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['TsangerYuYangT03', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                    },
+                },
+            },
+        };
+    </script>
+
+    <!-- vendored dependencies (order matters: ViewGen.js expects all of these already loaded) -->
+    <link rel="stylesheet" type="text/css" href="lib/joint.css" />
+    <link href="lib/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" type="text/css" href="style.css" />
+
+    <script src="lib/jquery.min.js"></script>
+    <script src="lib/lodash.min.js"></script>
+    <script src="lib/backbone.js"></script>
+    <script src="lib/graphlib.min.js"></script>
+    <script src="lib/dagre.min.js"></script>
+    <script src="lib/joint.js"></script>
+    <script src="lib/select2.min.js"></script>
+    <script src="LogicParser.js"></script>
+</head>
+
+<body class="bg-slate-100 text-slate-800">
+    <div class="joint-app">
+
+        <!-- ===================== header: minimap (300x150) + toolbar ===================== -->
+        <header class="app-header flex flex-row bg-white border-b border-slate-200 shadow-sm">
+
+            <!-- minimap: MUST stay 300x150, ViewGen.js derives miniScale = 300 / newWidth -->
+            <div class="mini-map shrink-0">
+                <div id="mini-paper"></div>
+                <div id="mini-view">
+                    <div id="mini-resize"></div>
+                </div>
+            </div>
+
+            <!-- toolbar -->
+            <div class="title-container flex flex-col gap-1.5 px-3 py-2 min-w-0">
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <label
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium cursor-pointer shadow-sm transition-colors">
+                        <img src="assets/icons/save2.svg" width="15" height="15" alt="" />
+                        <span>载入文本</span>
+                        <input type="file" class="hidden" id="fileToLoad" />
+                    </label>
+
+                    <button type="button"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium shadow-sm transition-colors"
+                        onclick="app.saveTextAsFile()">
+                        <img src="assets/icons/upload.svg" width="15" height="15" alt="" />
+                        <span>保存文本</span>
+                    </button>
+
+                    <input id="inputFileNameToSaveAs" value="默认保存名称"
+                        class="w-44 px-2.5 py-1.5 rounded-md border border-slate-300 text-sm text-center bg-white focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-400" />
+                </div>
+
+                <textarea id="ReversePol" spellcheck="false"
+                    placeholder="在此输入逆波兰逻辑表达式，例如：a b . fe >"
+                    class="w-full h-14 px-3 py-1.5 rounded-md border border-slate-300 bg-white font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 focus:border-amber-400"></textarea>
+
+                <button type="button"
+                    class="w-full px-4 py-1.5 rounded-lg bg-amber-400 hover:bg-orange-500 text-slate-900 text-sm font-semibold shadow-sm transition-colors"
+                    onclick="app.parseLogic()">解析文本</button>
+
+            </div>
+        </header>
+
+        <!-- ===================== body ===================== -->
+        <div class="app-body">
+
+            <!-- 10px gutter: .main-container and .bottom-container are offset by left:10px to clear it -->
+            <div class="left-container"></div>
+
+            <!-- top panel: model JSON + actions. Must line up with --panel-top in style.css. -->
+            <div class="top-panel flex flex-row items-stretch gap-3 p-3 overflow-hidden">
+
+                <div class="flex-1 min-w-0 flex flex-col gap-2">
+                    <div class="flex items-center gap-2">
+                        <label for="myModel"
+                            class="text-xs font-semibold text-slate-500 uppercase tracking-wide shrink-0">图形模型 JSON</label>
+                        <div class="grid grid-cols-2 gap-2 flex-1 min-w-0 max-w-xl">
+                            <button id="LoadButton" type="button"
+                                class="inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium shadow-sm transition-colors"
+                                onclick="app.load()">
+                                <img src="assets/icons/save2.svg" width="15" height="15" alt="" />
+                                <span>文本转图</span>
+                            </button>
+                            <button id="SaveButton" type="button"
+                                class="inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-md bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium shadow-sm transition-colors"
+                                onclick="app.save()">
+                                <img src="assets/icons/upload.svg" width="15" height="15" alt="" />
+                                <span>图转文本</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <textarea id="myModel" spellcheck="false"
+                        class="w-full flex-1 min-h-0 px-3 py-2 rounded-md border border-slate-300 bg-white font-mono text-xs leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-400">{
+                                nodeArray: [],
+                                linkArray: []
+                            }</textarea>
+                </div>
+
+                <!-- inspector (ViewGen.js resizes this element directly; width is the resize target) -->
+                <aside class="right-container flex flex-col gap-2 p-3 overflow-auto">
+                    <div class="flex items-center gap-2">
+                        <label for="ERName" class="w-16 shrink-0 text-sm text-slate-600">元素名称</label>
+                        <input type="text" id="ERName"
+                            class="flex-1 min-w-0 px-2.5 py-1.5 rounded-md border border-slate-300 bg-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-400" />
+                    </div>
+
+                    <div class="flex items-start gap-2">
+                        <label for="ERMemo" class="w-16 shrink-0 text-sm text-slate-600 pt-1.5">元素备注</label>
+                        <textarea id="ERMemo"
+                            class="flex-1 min-w-0 h-14 px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs resize-none focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-400"></textarea>
+                    </div>
+
+                    <!-- This <select> was absent from the original page, so app.UpdateOption() threw on
+                         $("#sheet3").select2(...). Restored here so the inspector button works. -->
+                    <div class="flex items-center gap-2">
+                        <label for="sheet3" class="w-16 shrink-0 text-sm text-slate-600">查找元素</label>
+                        <select id="sheet3" class="flex-1 min-w-0"></select>
+                    </div>
+
+                    <button id="ERSetName" type="button"
+                        class="w-full px-4 py-1.5 rounded-lg bg-amber-400 hover:bg-orange-500 text-slate-900 text-sm font-semibold shadow-sm transition-colors"
+                        onclick="app.ChangeName()">保存修改</button>
+                </aside>
+
+            </div>
+
+            <!-- canvas. ViewGen.js sets #paper-container height/width and reads its position()
+                 relative to .main-container, so neither element may gain a positioned ancestor. -->
+            <div class="main-container bg-white">
+                <div id="paper-container">
+                    <div id="paper" style="cursor:grab"></div>
+                </div>
+            </div>
+
+            <!-- drag handle between canvas and inspector. ViewGen.js reads its computed `right`
+                 value and rewrites it as a bare number, so NO transition may be applied here. -->
+            <div id="app-resize" class="bg-slate-200 hover:bg-rose-400">
+                <div class="absolute left-[-35px] w-[30px] h-[30px] bg-[length:100%] bg-no-repeat cursor-pointer"
+                    style="background-image:url(assets/box-arrow-in-right.svg)" onclick="app.ResizeBlock()"></div>
+            </div>
+
+            <!-- bottom status bar -->
+            <div class="bottom-container flex items-center px-3 overflow-hidden">
+                <p id="status" class="text-xs text-slate-600 truncate">Diagram Model loaded from Json Format.</p>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="ViewGen.js"></script>
+    <script>
+        // Progressive enhancement only, kept outside ViewGen.js.
+        // The original page never initialised the element lookup, so #sheet3 stayed inert.
+        $(function () {
+            try {
+                if (window.app && typeof app.UpdateOption === "function") app.UpdateOption();
+            } catch (e) {
+                console.error("UpdateOption init failed:", e);
+            }
+        });
+    </script>
+</body>
+
+</html>
